@@ -1,12 +1,16 @@
 import json
-import smtplib, ssl, csv
+import smtplib
+import ssl
+import csv
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
-
 from email_validator import validate_email, EmailNotValidError
 import html2text
 import re
+from tkinter import filedialog
+from tkinter import simpledialog
+from tkinter import messagebox
 
 
 def get_validated_email(email):
@@ -15,17 +19,23 @@ def get_validated_email(email):
         validation_info = validate_email(email)
 
         # replace with normalized form
-        email = validation_info.email
-        return email
+        email = validation_info.normalized
+        return email, None
     except EmailNotValidError as e:
-        # email is not valid, exception message is human-readable
+        # email is not valid, return error message
+        return None, str(e)
 
-        print(f"ERROR {email} [{str(e)}] Skipping to next entry...")
-        return None
+def validate_images(message):
+    images = re.findall('<img [^>]*src="([^"]+)', message)
+    image_filenames = []
+    for i, image in enumerate(images):
+        #  Get the path for the image in case they used a local reference earlier
+        messagebox.showinfo(f"Load Image {i}", f"Please select the image {image}")
+        image_filename = filedialog.askopenfilename()
+        image_filenames.append(image_filename)
+    return image_filenames
 
-
-def send_email(server, email, subject, message, sender):
-    email = "wbeeson@autelrobotics.com"
+def send_email(server, email, subject, message, sender, image_paths):
     # Declare message root
     msg_root = MIMEMultipart("related")
     msg_root['Subject'] = subject
@@ -39,11 +49,11 @@ def send_email(server, email, subject, message, sender):
     #  Add images to the HTML version
     images = re.findall('<img [^>]*src="([^"]+)', message)
     for i, image in enumerate(images):
+
         #  Set the ID of the image in the text
         message = message.replace(image, "cid:" + str(i))
 
-        #  Create an Email Image object
-        fp = open("assets/" + image, 'rb')
+        fp = open(image_paths[i], 'rb')
         msg_image = MIMEImage(fp.read())
         fp.close()
 
@@ -63,17 +73,17 @@ def send_email(server, email, subject, message, sender):
     server.sendmail(sender, [email], msg_root.as_string())
 
 
-def validate_message(column_names):
-    html_template = open("assets/email_message.html").read()
+def validate_message(column_names, message_filename):
+    html_template = open(message_filename).read()
 
     #  Check to make sure user submitted the correct tag pairs
-    tags = [tag.lower().strip() for tag in re.findall(r"\{(.*?)\}", html_template)]
+    tags = [tag.lower().strip() for tag in re.findall(r"\{(.*?)}", html_template)]
     if sorted(tags) != sorted(column_names):
         while True:
-            print("Detected tags are different than the tags defined in the CSV file.")
-            print(f"CSV:  [{sorted(column_names)}]")
-            print(f"HTML: [{sorted(tags)}]")
-            response = input("Continue? (y/n)")
+            response = messagebox.askquestion("Continue?",
+                                              "HTML tags are different than the headers defined in the CSV file.\n"
+                                              f"CSV:    {sorted(column_names)}\n"
+                                              f"HTML: {sorted(tags)}\n\nContinue?")
             if response.lower().__contains__("y"):
                 break
             if response.lower().__contains__("n"):
@@ -122,35 +132,62 @@ def get_column_names(csv_reader):
 
 
 #  Start the server
-smtp_server, sender = start_server()
+def main():
+    smtp_server, sender = start_server()
 
-#  Load the contact information
-csv_file = open('assets/list.csv', "r", encoding="UTF-8")
-csv_reader = csv.reader(csv_file, delimiter=',')
+    #  Load the message information
+    messagebox.showinfo("Load Message", "Please Select your HTML message file")
+    message_filename = filedialog.askopenfilename()
 
-#  Get the column names
-email_index, column_names = get_column_names(csv_reader)
-template = validate_message(column_names)
+    #  Load the contact information
+    messagebox.showinfo("Load Contacts", "Please Select your CSV File")
+    csv_filename = filedialog.askopenfilename()
+    csv_file = open(csv_filename, "r", encoding="UTF-8")
+    csv_reader = csv.reader(csv_file, delimiter=',')
 
-#  Get the subject
-subject = input("Please enter the subject line: ")
+    #  Get the column names
+    email_index, column_names = get_column_names(csv_reader)
+    template = validate_message(column_names, message_filename)
 
-#  Send the Emails
-for i, rows in enumerate(csv_reader):
-    column_values = get_row_values(rows)
-    email = get_validated_email(column_values.pop(email_index))
-    if email is None:
-        continue
-    get_customized_message = customize_message(template, column_names, column_values)
-    send_email(
-        server=smtp_server,
-        email=email,
-        subject=subject,
-        message=get_customized_message,
-        sender=sender
-    )
-    print(f"Message Sent To: {email} [Row {i}]")
+    #  Validate the image paths used for the html version
+    image_paths = validate_images(template)
 
-with open('assets/list.csv') as f:
-    row_count = sum(1 for line in f) - 1
-print(f"Done: Send Emails to all {row_count} Contacts")
+    #  Get the subject
+    while True:
+        subject = simpledialog.askstring("Subject", "Please enter the subject line: ")
+        response = messagebox.askquestion(f"Confirm", f"Confirm Subject: \n\"{subject}\"")
+        if response.lower().__contains__("y"):
+            break
+
+    #  Send the Emails
+    emails_sent = 0
+    errors = {}
+    for i, rows in enumerate(csv_reader):
+        column_values = get_row_values(rows)
+        raw_email = column_values.pop(email_index)
+        email, error = get_validated_email(raw_email)
+        if error is not None:
+            errors[i] = raw_email + " " + f"[{error}]"
+            continue
+        get_customized_message = customize_message(template, column_names, column_values)
+        send_email(
+            server=smtp_server,
+            email=email,
+            subject=subject,
+            message=get_customized_message,
+            sender=sender,
+            image_paths=image_paths
+        )
+        print(f"Message Sent To: {email} [Row {i}]")
+        emails_sent += 1
+
+    final_message = f"Sent Emails to {emails_sent} contacts\n"
+    if len(errors) > 0:
+        final_message += f"\nErrors: "
+        for error in errors:
+            final_message +=f"\nLine {error}: \t{errors[error]}\n"
+    messagebox.showinfo("Done", final_message)
+
+
+
+main()
