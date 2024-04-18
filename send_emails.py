@@ -25,15 +25,51 @@ def get_validated_email(email):
         # email is not valid, return error message
         return None, str(e)
 
+
 def validate_images(message):
     images = re.findall('<img [^>]*src="([^"]+)', message)
     image_filenames = []
     for i, image in enumerate(images):
         #  Get the path for the image in case they used a local reference earlier
-        messagebox.showinfo(f"Load Image {i}", f"Please select the image {image}")
+        messagebox.showinfo(f"Load Image {i + 1}", f"Please select the image {image}")
         image_filename = filedialog.askopenfilename()
         image_filenames.append(image_filename)
     return image_filenames
+
+
+def validate_csv_file(csv_filename):
+    errors = {}
+    csv_file = open(csv_filename, "r", encoding="UTF-8")
+    csv_reader = csv.reader(csv_file, delimiter=',')
+
+    #  Check the first line for the required email field
+    column_names = get_row_values(next(csv_reader))
+    if "email" not in column_names:
+        error_message = (f"Your top line header labels of the CSV file must contain the field 'email'.\n"
+                         f"Detected fields: {column_names}")
+        messagebox.showinfo("Errors", error_message)
+        raise Exception("Include the field 'Email' in the CSV file and rerun")
+
+    #  Remove the email field as it is hardcoded for different functionality than the rest of them
+    email_index = column_names.index("email")
+    column_names.pop(email_index)
+
+    for i, rows in enumerate(csv_reader):
+        column_values = get_row_values(rows)
+        raw_email = column_values.pop(email_index)
+        email, error = get_validated_email(raw_email)
+        if error is not None:
+            errors[i] = raw_email + " " + f"[{error}]"
+    error_message = ""
+    if len(errors) > 0:
+        error_message += f"\nErrors: "
+        for error in errors:
+            error_message += f"\nLine {error}: \t{errors[error]}\n"
+        messagebox.showinfo("Errors", error_message)
+        raise Exception("Fix the bad emails and rerun")
+
+    return email_index, column_names
+
 
 def send_email(server, email, subject, message, sender, image_paths):
     # Declare message root
@@ -49,7 +85,6 @@ def send_email(server, email, subject, message, sender, image_paths):
     #  Add images to the HTML version
     images = re.findall('<img [^>]*src="([^"]+)', message)
     for i, image in enumerate(images):
-
         #  Set the ID of the image in the text
         message = message.replace(image, "cid:" + str(i))
 
@@ -135,19 +170,24 @@ def get_column_names(csv_reader):
 def main():
     smtp_server, sender = start_server()
 
+    #  Load the contact information
+    messagebox.showinfo("Load Contacts", "Please Select your CSV File")
+    csv_filename = filedialog.askopenfilename()
+
+    #  Get the column names
+    email_index, column_names = validate_csv_file(csv_filename)
+
+    csv_file = open(csv_filename, "r", encoding="UTF-8")
+    csv_reader = csv.reader(csv_file, delimiter=',')
+    next(csv_reader)
+
     #  Load the message information
     messagebox.showinfo("Load Message", "Please Select your HTML message file")
     message_filename = filedialog.askopenfilename()
 
-    #  Load the contact information
-    messagebox.showinfo("Load Contacts", "Please Select your CSV File")
-    csv_filename = filedialog.askopenfilename()
-    csv_file = open(csv_filename, "r", encoding="UTF-8")
-    csv_reader = csv.reader(csv_file, delimiter=',')
-
-    #  Get the column names
-    email_index, column_names = get_column_names(csv_reader)
     template = validate_message(column_names, message_filename)
+
+    #  Validate CSV file emails
 
     #  Validate the image paths used for the html version
     image_paths = validate_images(template)
@@ -161,14 +201,10 @@ def main():
 
     #  Send the Emails
     emails_sent = 0
-    errors = {}
     for i, rows in enumerate(csv_reader):
         column_values = get_row_values(rows)
-        raw_email = column_values.pop(email_index)
-        email, error = get_validated_email(raw_email)
-        if error is not None:
-            errors[i] = raw_email + " " + f"[{error}]"
-            continue
+        email = column_values.pop(email_index)
+
         get_customized_message = customize_message(template, column_names, column_values)
         send_email(
             server=smtp_server,
@@ -182,12 +218,7 @@ def main():
         emails_sent += 1
 
     final_message = f"Sent Emails to {emails_sent} contacts\n"
-    if len(errors) > 0:
-        final_message += f"\nErrors: "
-        for error in errors:
-            final_message +=f"\nLine {error}: \t{errors[error]}\n"
     messagebox.showinfo("Done", final_message)
-
 
 
 main()
