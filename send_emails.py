@@ -13,18 +13,6 @@ from tkinter import simpledialog
 from tkinter import messagebox
 
 
-def get_validated_email(email):
-    try:
-        # validate and get info
-        validation_info = validate_email(email)
-
-        # replace with normalized form
-        email = validation_info.normalized
-        return email, None
-    except EmailNotValidError as e:
-        # email is not valid, return error message
-        return None, str(e)
-
 
 def validate_images(message):
     images = re.findall('<img [^>]*src="([^"]+)', message)
@@ -37,7 +25,7 @@ def validate_images(message):
     return image_filenames
 
 
-def validate_csv_file(csv_filename):
+def ensure_csv_has_email_field(csv_filename):
     errors = {}
     csv_file = open(csv_filename, "r", encoding="UTF-8")
     csv_reader = csv.reader(csv_file, delimiter=',')
@@ -53,21 +41,6 @@ def validate_csv_file(csv_filename):
     #  Remove the email field as it is hardcoded for different functionality than the rest of them
     email_index = column_names.index("email")
     column_names.pop(email_index)
-
-    for i, rows in enumerate(csv_reader):
-        column_values = get_row_values(rows)
-        raw_email = column_values.pop(email_index)
-        email, error = get_validated_email(raw_email)
-        if error is not None:
-            errors[i] = raw_email + " " + f"[{error}]"
-    error_message = ""
-    if len(errors) > 0:
-        error_message += f"\nErrors: "
-        for error in errors:
-            error_message += f"\nLine {error}: \t{errors[error]}\n"
-        messagebox.showinfo("Errors", error_message)
-        raise Exception("Fix the bad emails and rerun")
-
     return email_index, column_names
 
 
@@ -140,17 +113,13 @@ def get_row_values(rows):
     return values
 
 
-def start_server():
-    with open('keys/email.json') as f:
-        file = json.load(f)
-        sender = file["username"]
-        password = file["password"]
+def start_server(username, password):
 
     #  Start the email server
     context = ssl.create_default_context()
     server = smtplib.SMTP_SSL('smtp.gmail.com', 465, context=context)
-    server.login(sender, password)
-    return server, sender
+    server.login(username, password)
+    return server, username
 
 
 def get_column_names(csv_reader):
@@ -167,25 +136,19 @@ def get_column_names(csv_reader):
 
 
 #  Start the server
-def main():
-    smtp_server, sender = start_server()
+def start_send_emails(csv_filepath, message_filepath, username, password):
+    smtp_server, sender = start_server(username, password)
 
-    #  Load the contact information
-    messagebox.showinfo("Load Contacts", "Please Select your CSV File")
-    csv_filename = filedialog.askopenfilename()
+
 
     #  Get the column names
-    email_index, column_names = validate_csv_file(csv_filename)
+    email_index, column_names = ensure_csv_has_email_field(csv_filepath)
 
-    csv_file = open(csv_filename, "r", encoding="UTF-8")
+    csv_file = open(csv_filepath, "r", encoding="UTF-8")
     csv_reader = csv.reader(csv_file, delimiter=',')
     next(csv_reader)
 
-    #  Load the message information
-    messagebox.showinfo("Load Message", "Please Select your HTML message file")
-    message_filename = filedialog.askopenfilename()
-
-    template = validate_message(column_names, message_filename)
+    template = validate_message(column_names, message_filepath)
 
     #  Validate CSV file emails
 
@@ -221,4 +184,3 @@ def main():
     messagebox.showinfo("Done", final_message)
 
 
-main()
