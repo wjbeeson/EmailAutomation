@@ -5,28 +5,18 @@ import csv
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
+
+import pandas as pd
 from email_validator import validate_email, EmailNotValidError
 import html2text
 import re
 from tkinter import filedialog
 from tkinter import simpledialog
 from tkinter import messagebox
-
-
-
-def validate_images(message):
-    images = re.findall('<img [^>]*src="([^"]+)', message)
-    image_filenames = []
-    for i, image in enumerate(images):
-        #  Get the path for the image in case they used a local reference earlier
-        messagebox.showinfo(f"Load Image {i + 1}", f"Please select the image {image}")
-        image_filename = filedialog.askopenfilename()
-        image_filenames.append(image_filename)
-    return image_filenames
+from validate_images import *
 
 
 def ensure_csv_has_email_field(csv_filename):
-    errors = {}
     csv_file = open(csv_filename, "r", encoding="UTF-8")
     csv_reader = csv.reader(csv_file, delimiter=',')
 
@@ -41,51 +31,14 @@ def ensure_csv_has_email_field(csv_filename):
     #  Remove the email field as it is hardcoded for different functionality than the rest of them
     email_index = column_names.index("email")
     column_names.pop(email_index)
-    return email_index, column_names
+    return email_index, column_names, csv_reader
 
 
-def send_email(server, email, subject, message, sender, image_paths):
-    # Declare message root
-    msg_root = MIMEMultipart("related")
-    msg_root['Subject'] = subject
-    msg_root['From'] = sender
-    msg_root['To'] = email
-
-    # Assign message alternatives
-    msg_alternative = MIMEMultipart('alternative')
-    msg_root.attach(msg_alternative)
-
-    #  Add images to the HTML version
-    images = re.findall('<img [^>]*src="([^"]+)', message)
-    for i, image in enumerate(images):
-        #  Set the ID of the image in the text
-        message = message.replace(image, "cid:" + str(i))
-
-        fp = open(image_paths[i], 'rb')
-        msg_image = MIMEImage(fp.read())
-        fp.close()
-
-        # Define the image's ID as referenced in HTML text
-        msg_image.add_header('Content-ID', f'<{i}>')
-        msg_root.attach(msg_image)
-
-    #  Add plain text version to Email
-    text_version = html2text.html2text(message)
-    text_final = MIMEText(text_version, "plain")
-    msg_alternative.attach(text_final)
-
-    #  Add HTML version to Email
-    html_final = MIMEText(message, "html")
-    msg_alternative.attach(html_final)
-
-    server.sendmail(sender, [email], msg_root.as_string())
-
-
-def validate_message(column_names, message_filename):
-    html_template = open(message_filename).read()
+def check_message_matches_csv(column_names, message_filename):
+    template = open(message_filename).read()
 
     #  Check to make sure user submitted the correct tag pairs
-    tags = [tag.lower().strip() for tag in re.findall(r"\{(.*?)}", html_template)]
+    tags = [tag.lower().strip() for tag in re.findall(r"\{(.*?)}", template)]
     if sorted(tags) != sorted(column_names):
         while True:
             response = messagebox.askquestion("Continue?",
@@ -97,7 +50,7 @@ def validate_message(column_names, message_filename):
             if response.lower().__contains__("n"):
                 raise Exception("User stopped the program. Revise tags and re-run.")
 
-    return html_template
+    return template
 
 
 def customize_message(template, column_names, column_values):
@@ -114,12 +67,11 @@ def get_row_values(rows):
 
 
 def start_server(username, password):
-
     #  Start the email server
     context = ssl.create_default_context()
     server = smtplib.SMTP_SSL('smtp.gmail.com', 465, context=context)
     server.login(username, password)
-    return server, username
+    return server
 
 
 def get_column_names(csv_reader):
@@ -135,52 +87,77 @@ def get_column_names(csv_reader):
     return email_index, column_names
 
 
-#  Start the server
-def start_send_emails(csv_filepath, message_filepath, username, password):
-    smtp_server, sender = start_server(username, password)
+def format_message_root(subject, username, template, image_paths, message_filepath, email):
+    # Declare message root
+    msg_root = MIMEMultipart("related")
+    msg_root['Subject'] = subject
+    msg_root['From'] = username
+    msg_root["To"] = email
+    msg_alternative = MIMEMultipart('alternative')
+    msg_root.attach(msg_alternative)
+
+    #  Add images
+    images = get_image_filenames(message_filepath)
+    for i, image in enumerate(images):
+        #  Set the ID of the image in the text
+        template = template.replace(image, "cid:" + str(i), 1)
+
+        fp = open(image_paths[i], 'rb')
+        msg_image = MIMEImage(fp.read())
+        fp.close()
+
+        # Define the image's ID as referenced in HTML text
+        msg_image.add_header('Content-ID', f'<{i}>')
+        msg_root.attach(msg_image)
+    return msg_root, msg_alternative, template
 
 
+def start_send_emails(csv_filepath, message_filepath, username, password, subject, image_paths, progress_bar_progress, base):
+    #  Get column information
+    email_index, column_names, csv_reader = ensure_csv_has_email_field(csv_filepath)
 
-    #  Get the column names
-    email_index, column_names = ensure_csv_has_email_field(csv_filepath)
+    #  Validate that the message fields match the csv columns
+    template = check_message_matches_csv(column_names, message_filepath)
 
-    csv_file = open(csv_filepath, "r", encoding="UTF-8")
-    csv_reader = csv.reader(csv_file, delimiter=',')
-    next(csv_reader)
+    #  Start the server
+    server = start_server(username, password)
 
-    template = validate_message(column_names, message_filepath)
+    #  Calculate Increment for progress bar
+    lines = len(pd.read_csv(csv_filepath))
+    total_progress_bar_size = 99.9
+    increment = total_progress_bar_size / lines
+    current_progress = 0
 
-    #  Validate CSV file emails
-
-    #  Validate the image paths used for the html version
-    image_paths = validate_images(template)
-
-    #  Get the subject
-    while True:
-        subject = simpledialog.askstring("Subject", "Please enter the subject line: ")
-        response = messagebox.askquestion(f"Confirm", f"Confirm Subject: \n\"{subject}\"")
-        if response.lower().__contains__("y"):
-            break
-
-    #  Send the Emails
     emails_sent = 0
     for i, rows in enumerate(csv_reader):
+
+        #  Pull out the email field from the column values
         column_values = get_row_values(rows)
         email = column_values.pop(email_index)
 
-        get_customized_message = customize_message(template, column_names, column_values)
-        send_email(
-            server=smtp_server,
-            email=email,
-            subject=subject,
-            message=get_customized_message,
-            sender=sender,
-            image_paths=image_paths
-        )
-        print(f"Message Sent To: {email} [Row {i}]")
+        #  Add images to root and create the header
+        msg_root, msg_alternative, template = format_message_root(subject, username, template, image_paths,
+                                                                  message_filepath, email)
+
+        #  Format the template with column info
+        customized_message = customize_message(template, column_names, column_values)
+
+        #  Add plain text version to Email
+        text_version = html2text.html2text(customized_message)
+        text_final = MIMEText(text_version, "plain")
+        msg_alternative.attach(text_final)
+
+        #  Add HTML version to Email
+        html_final = MIMEText(customized_message, "html")
+        msg_alternative.attach(html_final)
+
+        #  Send the Email
+        server.sendmail(username, [email], msg_root.as_string())
+
+        current_progress += increment
+        progress_bar_progress.set(current_progress)
+        base.update_idletasks()
         emails_sent += 1
 
     final_message = f"Sent Emails to {emails_sent} contacts\n"
     messagebox.showinfo("Done", final_message)
-
-

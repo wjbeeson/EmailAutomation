@@ -1,7 +1,9 @@
 import json
+import math
 import smtplib
 import ssl
 import csv
+import time
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
@@ -12,6 +14,7 @@ from tkinter import filedialog
 from tkinter import simpledialog
 from tkinter import messagebox
 from send_emails import get_row_values
+import pandas as pd
 
 
 def get_validated_email(email):
@@ -25,7 +28,9 @@ def get_validated_email(email):
     except EmailNotValidError as e:
         # email is not valid, return error message
         return None, str(e)
-def validate_csv_file(csv_filename):
+
+
+def validate_csv_file(csv_filename, progress_bar_progress, base):
     errors = {}
     csv_file = open(csv_filename, "r", encoding="UTF-8")
     csv_reader = csv.reader(csv_file, delimiter=',')
@@ -41,12 +46,23 @@ def validate_csv_file(csv_filename):
     email_index = column_names.index("email")
     column_names.pop(email_index)
 
+    #  Calculate Increment for progress bar
+    lines = len(pd.read_csv(csv_filename))
+    total_progress_bar_size = 99.9
+    increment = total_progress_bar_size / lines
+    current_progress = 0
+
+    #  Validate emails
     for i, rows in enumerate(csv_reader):
         column_values = get_row_values(rows)
         raw_email = column_values.pop(email_index)
         email, error = get_validated_email(raw_email)
         if error is not None:
             errors[i] = raw_email + " " + f"[{error}]"
+        current_progress += increment
+        progress_bar_progress.set(current_progress)
+        base.update_idletasks()
+
     error_message = ""
     if len(errors) > 0:
         error_message += f"\nErrors: "

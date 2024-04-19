@@ -8,7 +8,6 @@ from tkinter import simpledialog
 from tkinter import messagebox
 
 import main_form
-from validate_sheet import validate_csv_file
 from account_management import *
 from main_form import *
 

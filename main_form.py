@@ -4,6 +4,11 @@ from account_management import *
 from send_emails import *
 from tkinter import Label
 from tkinter import *
+from pathlib import Path
+from functools import partial
+from validate_images import *
+from tkinter import ttk
+from validate_sheet import validate_csv_file
 
 
 class MainMenu:
@@ -16,29 +21,39 @@ class MainMenu:
         self.selected_account = ""
         self.color = "Green"
 
-
-        self.base.geometry('450x400')
+        self.base.geometry('450x400')  # w x h
         self.base.title("Email Bot")
         current_row = 0
 
-        Label(self.base, text="Account: ", font=("bold", 10)).grid(row=current_row, column=0, columnspan=1,
-                                                                            sticky=W)
-        self.account_menu_selection = tkinter.StringVar()
-        self.account_menu_selection.trace("w", self.option_menu_click)
-        #  Dropdown menu to change account
-        self.account_menu = OptionMenu(self.base, self.account_menu_selection, *[""])
-        self.account_menu.grid(row=current_row, column=1, sticky=EW, columnspan=1)
+        self.main_frame = Frame(self.base, width=450, height=400)
+        self.main_frame.pack()
 
+        # Select the Subject
+        Label(self.main_frame, text="Subject: ", font=("bold", 10)).grid(row=current_row, column=0, columnspan=1,
+                                                                         sticky=W)
+        self.subject = StringVar()
+        Entry(self.main_frame, textvariable=self.subject, font=("bold", 10)).grid(row=current_row, column=1,
+                                                                                  columnspan=1,
+                                                                                  sticky=E + W)
+        current_row += 1
+
+        #  Dropdown menu to change account
+        Label(self.main_frame, text="Account: ", font=("bold", 10)).grid(row=current_row, column=0, columnspan=1,
+                                                                         sticky=W)
+        self.account_menu_selection = tkinter.StringVar()
+        self.account_menu_selection.trace("w", self.option_menu_click)  # Trace to call function whenever changed
+        self.account_menu = OptionMenu(self.main_frame, self.account_menu_selection, *[""])
+        self.account_menu.grid(row=current_row, column=1, sticky=EW, columnspan=1)
         current_row += 1
 
         # Buttons to select and validate a CSV sheet
-        Label(self.base, text="Contact Sheet: ", font=("bold", 10)).grid(row=current_row, column=0, columnspan=1,
-                                                                            sticky=W)
+        Label(self.main_frame, text="Contact Sheet: ", font=("bold", 10)).grid(row=current_row, column=0, columnspan=1,
+                                                                               sticky=W)
         self.select_sheet_button_text = tkinter.StringVar()
-        self.select_sheet_button = Button(self.base, textvariable=self.select_sheet_button_text, fg='black',
+        self.select_sheet_button = Button(self.main_frame, textvariable=self.select_sheet_button_text, fg='black',
                                           command=self.select_sheet)
         self.select_sheet_button.grid(row=current_row, column=1, columnspan=1, sticky=W + E)
-        Button(self.base, text='Validate Sheet', bg=self.color, fg='white', command=self.validate_sheet).grid(
+        Button(self.main_frame, text='Validate Sheet', bg=self.color, fg='white', command=self.validate_sheet).grid(
             row=current_row,
             column=2,
             columnspan=1,
@@ -46,10 +61,10 @@ class MainMenu:
         current_row += 1
 
         # Select message button
-        Label(self.base, text="Message Template: ", font=("bold", 10)).grid(row=current_row, column=0, columnspan=1,
-                                                                            sticky=W)
+        Label(self.main_frame, text="Message Template: ", font=("bold", 10)).grid(row=current_row, column=0, sticky=W,
+                                                                                  columnspan=1)
         self.select_message_button_text = tkinter.StringVar()
-        self.select_message_button = Button(self.base, textvariable=self.select_message_button_text, fg='black',
+        self.select_message_button = Button(self.main_frame, textvariable=self.select_message_button_text, fg='black',
                                             command=self.select_message)
         self.select_message_button.grid(
             row=current_row,
@@ -58,7 +73,19 @@ class MainMenu:
             sticky=W + E)
         current_row += 1
 
-        self.send_emails_button = Button(self.base, text='Send Emails', bg=self.color, fg='white',
+        # Add image subframe for later adding image validation if needed
+        self.image_subframe = Frame(self.main_frame, width=self.main_frame.winfo_width(), padx=20)
+        self.image_subframe.grid(
+            row=current_row,
+            column=0,
+            columnspan=4,
+            sticky=W + E)
+        self.image_selector_text_map = {}  # Used to store references to the StringVars on the image selector buttons
+        self.image_selector_map = {}  # Used to store the actual paths for the selected images
+        current_row += 1
+
+        # Add send emails button
+        self.send_emails_button = Button(self.main_frame, text='Send Emails', bg=self.color, fg='white',
                                          command=self.send_emails)
         self.send_emails_button.grid(
             row=current_row,
@@ -67,8 +94,10 @@ class MainMenu:
             sticky=W + E)
         current_row += 1
 
+        # Add configurable error text to avoid excessive pop-up windows
         self.error_message_text = tkinter.StringVar()
-        self.error_message = Label(self.base, textvariable=self.error_message_text, font=("bold", 10), foreground="red")
+        self.error_message = Label(self.main_frame, textvariable=self.error_message_text, font=("bold", 10),
+                                   foreground="red")
         current_row += 1
 
         self.error_message.grid(row=current_row, column=0, columnspan=4, sticky=W + E)
@@ -77,9 +106,66 @@ class MainMenu:
             message_button_text="Select",
             error_text=""
         )
+        current_row += 1
+
+        # add progress bar subframe
+        self.progress_bar_progress = IntVar()
+        self.progress_subframe = Frame(self.main_frame, width=self.main_frame.winfo_width(), padx=0)
+        self.progress_subframe.columnconfigure(0, weight=1)
+        self.progress_subframe.grid(
+            row=current_row,
+            column=0,
+            columnspan=4,
+            sticky=W + E)
+        current_row += 1
+
         self.base.mainloop()
 
-    def set_form_values(self, sheet_button_text=None, message_button_text=None, account_selection=None, error_text=None):
+    def add_progress_bar(self):
+        self.remove_progress_bar()
+        ttk.Progressbar(self.progress_subframe, variable=self.progress_bar_progress).grid(row=0, column=0,
+                                                                                          sticky=W + E + S)
+
+    def remove_progress_bar(self):
+        for ele in self.progress_subframe.winfo_children():
+            ele.destroy()
+
+    def add_image_selectors(self, frame: Frame, defined_image_names: list):
+        # Clear all previous images from the selector panel
+
+        self.image_selector_text_map = {}
+
+        current_row = 0
+        for i, name in enumerate(defined_image_names):
+            # Select message button
+            Label(frame, text=f"Select {name}: ", font=("bold", 10)).grid(row=current_row, column=0, columnspan=1,
+                                                                          sticky=W)
+            # Need to use an ID because can't assume image name is unique
+            selector_id = i
+            self.image_selector_text_map[selector_id] = StringVar()
+            self.image_selector_text_map[selector_id].set(value="Select")
+
+            action_with_arg = partial(self.select_image, selector_id)
+            image_selector = Button(frame, textvariable=self.image_selector_text_map[selector_id], fg='black',
+                                    command=action_with_arg)
+            image_selector.grid(row=current_row, column=1, columnspan=1, sticky=W + E)
+            current_row += 1
+
+    def select_image(self, selector_id):
+        filepath = tkinter.filedialog.askopenfile().name
+        if Path(filepath).suffix != ".jpg" and Path(filepath).suffix != ".png":
+            self.set_form_values(
+                error_text="Allowed image types include .jpg or .png."
+            )
+            return
+        self.image_selector_map[selector_id] = filepath
+        self.set_form_values(
+            update_image_selectors=True,
+            error_text=""
+        )
+
+    def set_form_values(self, sheet_button_text=None, message_button_text=None, account_selection=None,
+                        error_text=None, update_image_selectors=False):
         if sheet_button_text is not None:
             self.select_sheet_button_text.set(sheet_button_text)
         if message_button_text is not None:
@@ -100,7 +186,10 @@ class MainMenu:
         elif self.selected_account == "" or self.selected_account == None:
             self.account_menu_selection.set(account_list[0])
             self.selected_account = account_list[0]
-
+        if update_image_selectors:
+            for selector in list(self.image_selector_map.keys()):
+                self.image_selector_text_map[selector].set(Path(self.image_selector_map[selector]).name)
+        print(self.image_selector_map)
 
     def select_sheet(self):
         filepath = tkinter.filedialog.askopenfile().name
@@ -128,26 +217,32 @@ class MainMenu:
             error_text=""
         )
 
+        image_filepaths = get_image_filenames(filepath)
+        self.add_image_selectors(self.image_subframe, image_filepaths)
+
     def validate_sheet(self):
+
         if self.selected_sheet == "" or self.selected_sheet is None:
             self.set_form_values(
-                error_text="Please select a valid CSV file to validate."
+                error_text="Please select a valid CSV file."
             )
             return
-        validate_csv_file(self.selected_sheet)
+        self.add_progress_bar()
+        validate_csv_file(self.selected_sheet, self.progress_bar_progress, self.base)
+        self.remove_progress_bar()
 
     def option_menu_click(self, *args):
         if self.account_menu_selection.get() == "Add New/Update Existing":
             AccountMenu(self.base)
         else:
             self.set_form_values(
-                account_selection= self.account_menu_selection.get()
-           )
+                account_selection=self.account_menu_selection.get()
+            )
 
     def send_emails(self):
-        if self.selected_sheet == "" or self.selected_sheet == None and self.selected_message == "" or self.selected_message == None:
+        if self.subject.get().replace(" ", "") == "" or self.subject == None:
             self.set_form_values(
-                error_text="Please select a contact sheet and a message sheet."
+                error_text="Please enter a subject."
             )
             return
         if self.selected_sheet == "" or self.selected_sheet == None:
@@ -160,5 +255,25 @@ class MainMenu:
                 error_text="Please select a message template."
             )
             return
+        if sorted(list(self.image_selector_map.keys())) != sorted(list(self.image_selector_text_map.keys())):
+            self.set_form_values(
+                error_text="Please select the paths for all images in the message."
+            )
+            return
 
-        start_send_emails(self.selected_sheet, self.selected_message, self.selected_account, get_stored_accounts()[self.selected_account])
+        # Need to sort image paths to make them line up
+        self.add_progress_bar()
+        sorted_image_paths = []
+        for selector in sorted(self.image_selector_map):
+            sorted_image_paths.append(self.image_selector_map[selector])
+
+        start_send_emails(
+            csv_filepath=self.selected_sheet,
+            message_filepath=self.selected_message,
+            username=self.selected_account,
+            password=get_stored_accounts()[self.selected_account],
+            subject=self.subject.get(),
+            image_paths=sorted_image_paths,
+            progress_bar_progress=self.progress_bar_progress,
+            base=self.base)
+        self.remove_progress_bar()
