@@ -62,7 +62,7 @@ def validate_csv_file(csv_filename, progress_bar_progress, base):
         current_progress += increment
         progress_bar_progress.set(current_progress)
         base.update_idletasks()
-
+        base.update()
     error_message = ""
     if len(errors) > 0:
         error_message += f"\nErrors: "

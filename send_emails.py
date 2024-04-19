@@ -1,17 +1,12 @@
-import json
 import smtplib
 import ssl
 import csv
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
-
+import time
 import pandas as pd
-from email_validator import validate_email, EmailNotValidError
 import html2text
-import re
-from tkinter import filedialog
-from tkinter import simpledialog
 from tkinter import messagebox
 from validate_images import *
 
@@ -157,6 +152,7 @@ def start_send_emails(csv_filepath, message_filepath, username, password, subjec
         current_progress += increment
         progress_bar_progress.set(current_progress)
         base.update_idletasks()
+        base.update()
         emails_sent += 1
 
     final_message = f"Sent Emails to {emails_sent} contacts\n"
