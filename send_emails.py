@@ -152,7 +152,10 @@ def start_send_emails(csv_filepath, message_filepath, username, password, subjec
         msg_alternative.attach(html_final)
 
         #  Send the Email
-        send_email(server, email, username, password, msg_root, submissions, i, progress_bar, increment)
+        try:
+            send_email(server, email, username, password, msg_root, submissions, i, progress_bar, increment)
+        except:
+            pass
         # t = threading.Thread(target=send_email, args=(email, username, password, msg_root, submissions, i, progress_bar, increment))
         # t.daemon = True
         # t.start()

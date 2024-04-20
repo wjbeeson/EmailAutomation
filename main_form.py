@@ -220,7 +220,7 @@ class MainMenu:
         self.add_image_selectors(self.image_subframe, image_filepaths)
 
     def validate_sheet(self):
-
+        self.toggle_base_state('disable')
         if self.selected_sheet == "" or self.selected_sheet is None:
             self.set_form_values(
                 error_text="Please select a valid CSV file."
@@ -229,6 +229,7 @@ class MainMenu:
         self.add_progress_bar()
         validate_csv_file(self.selected_sheet, self.progress_bar, self.base)
         self.remove_progress_bar()
+        self.toggle_base_state()
 
     def option_menu_click(self, *args):
         if self.account_menu_selection.get() == "Add New/Update Existing":
