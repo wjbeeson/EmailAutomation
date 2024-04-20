@@ -1,6 +1,7 @@
 import smtplib
 import ssl
 import csv
+import threading
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
@@ -65,6 +66,7 @@ def start_server(username, password):
     #  Start the email server
     context = ssl.create_default_context()
     server = smtplib.SMTP_SSL('smtp.gmail.com', 465, context=context)
+    # server.set_debuglevel(1)
     server.login(username, password)
     return server
 
@@ -107,7 +109,7 @@ def format_message_root(subject, username, template, image_paths, message_filepa
     return msg_root, msg_alternative, template
 
 
-def start_send_emails(csv_filepath, message_filepath, username, password, subject, image_paths, progress_bar_progress, base):
+def start_send_emails(csv_filepath, message_filepath, username, password, subject, image_paths, progress_bar, base):
     #  Get column information
     email_index, column_names, csv_reader = ensure_csv_has_email_field(csv_filepath)
 
@@ -121,10 +123,13 @@ def start_send_emails(csv_filepath, message_filepath, username, password, subjec
     lines = len(pd.read_csv(csv_filepath))
     total_progress_bar_size = 99.9
     increment = total_progress_bar_size / lines
-    current_progress = 0
 
     emails_sent = 0
+    submissions = []
     for i, rows in enumerate(csv_reader):
+        #  Refresh Progress Bar
+        base.update_idletasks()
+        base.update()
 
         #  Pull out the email field from the column values
         column_values = get_row_values(rows)
@@ -147,13 +152,21 @@ def start_send_emails(csv_filepath, message_filepath, username, password, subjec
         msg_alternative.attach(html_final)
 
         #  Send the Email
-        server.sendmail(username, [email], msg_root.as_string())
+        send_email(server, email, username, password, msg_root, submissions, i, progress_bar, increment)
+        # t = threading.Thread(target=send_email, args=(email, username, password, msg_root, submissions, i, progress_bar, increment))
+        # t.daemon = True
+        # t.start()
 
-        current_progress += increment
-        progress_bar_progress.set(current_progress)
+    while len(submissions) < lines:
         base.update_idletasks()
         base.update()
-        emails_sent += 1
 
-    final_message = f"Sent Emails to {emails_sent} contacts\n"
+    final_message = f"Sent Emails to {lines} contacts\n"
     messagebox.showinfo("Done", final_message)
+    server.quit()
+
+
+def send_email(server, email, username, password, msg_root, submissions, i, progress_bar, increment):
+    server.sendmail(username, [email], msg_root.as_string())
+    submissions.append(i)
+    progress_bar.step(increment)

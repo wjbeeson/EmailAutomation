@@ -15,23 +15,24 @@ from tkinter import simpledialog
 from tkinter import messagebox
 from send_emails import get_row_values
 import pandas as pd
+import threading
 
 
-def get_validated_email(email):
+def get_validated_email(email, i, errors, increment, progress_bar, base, submissions):
     try:
         # validate and get info
         validation_info = validate_email(email)
 
         # replace with normalized form
         email = validation_info.normalized
-        return email, None
     except EmailNotValidError as e:
-        # email is not valid, return error message
-        return None, str(e)
+        errors[i] = email + " " + f"[{e}]"
+    submissions.append(i)
+    progress_bar.step(increment)
 
 
-def validate_csv_file(csv_filename, progress_bar_progress, base):
-    errors = {}
+
+def validate_csv_file(csv_filename, progress_bar, base):
     csv_file = open(csv_filename, "r", encoding="UTF-8")
     csv_reader = csv.reader(csv_file, delimiter=',')
 
@@ -48,26 +49,39 @@ def validate_csv_file(csv_filename, progress_bar_progress, base):
 
     #  Calculate Increment for progress bar
     lines = len(pd.read_csv(csv_filename))
-    total_progress_bar_size = 99.9
-    increment = total_progress_bar_size / lines
-    current_progress = 0
+    increment = 99.9/ lines
+
+    #  Get Emails
+    errors = {}
+    submissions = []
 
     #  Validate emails
     for i, rows in enumerate(csv_reader):
-        column_values = get_row_values(rows)
-        raw_email = column_values.pop(email_index)
-        email, error = get_validated_email(raw_email)
-        if error is not None:
-            errors[i] = raw_email + " " + f"[{error}]"
-        current_progress += increment
-        progress_bar_progress.set(current_progress)
         base.update_idletasks()
         base.update()
+        column_values = get_row_values(rows)
+        raw_email = column_values.pop(email_index)
+        t = threading.Thread(target=get_validated_email,
+                             args=(raw_email, i, errors, increment, progress_bar, base, submissions))
+        t.daemon = True
+        t.start()
+
+    #  Wait for submissions to be done
+    while len(submissions) < lines:
+        base.update_idletasks()
+        base.update()
+
+    #  Sort error messages
+    sorted_errors = {}
+    for i in sorted(errors):
+        sorted_errors[i] = errors[i]
+
+    #  Print out error messages
     error_message = ""
     if len(errors) > 0:
         error_message += f"\nErrors: "
-        for error in errors:
-            error_message += f"\nLine {error + 1}: \t{errors[error]}\n"
+        for error in sorted_errors:
+            error_message += f"\nLine {error + 2}: \t{sorted_errors[error]}\n"
         messagebox.showerror("Errors", error_message)
     else:
         messagebox.showinfo("Woohoo!", "No detected errors")

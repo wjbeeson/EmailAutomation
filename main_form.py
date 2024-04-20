@@ -53,7 +53,7 @@ class MainMenu:
         self.select_sheet_button = Button(self.main_frame, textvariable=self.select_sheet_button_text, fg='black',
                                           command=self.select_sheet)
         self.select_sheet_button.grid(row=current_row, column=1, columnspan=1, sticky=W + E)
-        Button(self.main_frame, text='Validate Sheet', bg=self.color, fg='white', command=self.validate_sheet).grid(
+        Button(self.main_frame, text='Validate Emails', bg=self.color, fg='white', command=self.validate_sheet).grid(
             row=current_row,
             column=2,
             columnspan=1,
@@ -109,7 +109,7 @@ class MainMenu:
         current_row += 1
 
         # add progress bar subframe
-        self.progress_bar_progress = IntVar()
+        self.progress_bar = None
         self.progress_subframe = Frame(self.main_frame, width=self.main_frame.winfo_width(), padx=0)
         self.progress_subframe.columnconfigure(0, weight=1)
         self.progress_subframe.grid(
@@ -123,8 +123,8 @@ class MainMenu:
 
     def add_progress_bar(self):
         self.remove_progress_bar()
-        ttk.Progressbar(self.progress_subframe, variable=self.progress_bar_progress).grid(row=0, column=0,
-                                                                                          sticky=W + E + S)
+        self.progress_bar = ttk.Progressbar(self.progress_subframe)
+        self.progress_bar.grid(row=0, column=0, sticky=W + E)
 
     def remove_progress_bar(self):
         for ele in self.progress_subframe.winfo_children():
@@ -189,7 +189,6 @@ class MainMenu:
         if update_image_selectors:
             for selector in list(self.image_selector_map.keys()):
                 self.image_selector_text_map[selector].set(Path(self.image_selector_map[selector]).name)
-        print(self.image_selector_map)
 
     def select_sheet(self):
         filepath = tkinter.filedialog.askopenfile().name
@@ -228,7 +227,7 @@ class MainMenu:
             )
             return
         self.add_progress_bar()
-        validate_csv_file(self.selected_sheet, self.progress_bar_progress, self.base)
+        validate_csv_file(self.selected_sheet, self.progress_bar, self.base)
         self.remove_progress_bar()
 
     def option_menu_click(self, *args):
@@ -238,6 +237,17 @@ class MainMenu:
             self.set_form_values(
                 account_selection=self.account_menu_selection.get()
             )
+    def toggle_base_state(self, state='normal'):
+        for child in self.main_frame.winfo_children():
+            try:
+                child['state'] = state
+            except:
+                pass
+        for child in self.image_subframe.winfo_children():
+            try:
+                child['state'] = state
+            except:
+                pass
 
     def send_emails(self):
         if self.subject.get().replace(" ", "") == "" or self.subject == None:
@@ -262,6 +272,7 @@ class MainMenu:
             return
 
         # Need to sort image paths to make them line up
+        self.toggle_base_state('disabled')
         self.add_progress_bar()
         sorted_image_paths = []
         for selector in sorted(self.image_selector_map):
@@ -274,6 +285,7 @@ class MainMenu:
             password=get_stored_accounts()[self.selected_account],
             subject=self.subject.get(),
             image_paths=sorted_image_paths,
-            progress_bar_progress=self.progress_bar_progress,
+            progress_bar=self.progress_bar,
             base=self.base)
         self.remove_progress_bar()
+        self.toggle_base_state()
