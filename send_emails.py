@@ -101,9 +101,9 @@ def add_images_to_root(msg_root, message_filepath, image_paths, message):
     #  Add images
     images = get_image_filenames(message_filepath)
     for i, image in enumerate(images):
+
         #  Set the ID of the image in the text
         message = message.replace(image, "cid:" + str(i), 1)
-
         fp = open(image_paths[i], 'rb')
         msg_image = MIMEImage(fp.read())
         fp.close()
@@ -179,6 +179,7 @@ def email_manager(csv_filepath, message_filepath, sender, password, subject, ima
         t.daemon = True
         t.start()
 
+    #  Wait for all emails to send
     while True:
         keep_waiting = False
         for msg_queue in message_queues:
@@ -194,7 +195,6 @@ def email_manager(csv_filepath, message_filepath, sender, password, subject, ima
 
 
 def send_emails(sender, password, increment, progress_bar, base, message_queue: list, i):
-
     #  Start the server and return if failed
     try:
         server = start_server(sender, password)
@@ -218,7 +218,6 @@ def send_emails(sender, password, increment, progress_bar, base, message_queue: 
         base.update()
 
     #  server.quit()
-
 
 
 class Message():
