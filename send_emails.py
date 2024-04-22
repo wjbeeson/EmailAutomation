@@ -159,14 +159,14 @@ def email_manager(csv_filepath, message_filepath, sender, password, subject, ima
     template = open_validate_message(column_names, message_filepath)
 
     #  Define Server Count
-    server_count = 20
+    server_count = 5
 
     #  Create the message queue
     message_queues = []
     for i in range(server_count):
         message_queues.append([])
 
-    #  Assemble the messages
+    #  Assemble the message queues
     for i, rows in enumerate(csv_reader):
         message = assemble_message(rows, email_index, template, column_names, subject, sender, image_paths,
                                    message_filepath)
@@ -176,7 +176,7 @@ def email_manager(csv_filepath, message_filepath, sender, password, subject, ima
     #  Send Emails
     for i in range(server_count):
         t = threading.Thread(target=send_emails,
-                             args=(sender, password, increment, progress_bar, base, message_queues[i]))
+                             args=(sender, password, increment, progress_bar, base, message_queues[i], i))
         t.daemon = True
         t.start()
 
@@ -194,20 +194,31 @@ def email_manager(csv_filepath, message_filepath, sender, password, subject, ima
     messagebox.showinfo("Done", final_message)
 
 
-def send_emails(sender, password, increment, progress_bar, base, message_queue: list):
-    server = start_server(sender, password)
+def send_emails(sender, password, increment, progress_bar, base, message_queue: list, i):
+
+    #  Start the server and return if failed
+    try:
+        server = start_server(sender, password)
+    except Exception as e:
+        if i == 0:
+            messagebox.showinfo("Error", str(e))
+        return
+
+    #  Send the messages and ignore any errors
     while len(message_queue) > 0:
         message = message_queue.pop()
         try:
             server.sendmail(sender, [message.recipient], message.msg_root.as_string())
-        except Exception:
+        except:
             pass
 
         #  Update the progress bar
         progress_bar.step(increment)
         base.update_idletasks()
         base.update()
-    server.quit()
+
+    #  server.quit()
+
 
 
 class Message():

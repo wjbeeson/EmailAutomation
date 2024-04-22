@@ -31,7 +31,6 @@ def get_validated_email(email, i, errors, increment, progress_bar, base, submiss
     progress_bar.step(increment)
 
 
-
 def validate_csv_file(csv_filename, progress_bar, base):
     csv_file = open(csv_filename, "r", encoding="UTF-8")
     csv_reader = csv.reader(csv_file, delimiter=',')
@@ -49,7 +48,7 @@ def validate_csv_file(csv_filename, progress_bar, base):
 
     #  Calculate Increment for progress bar
     lines = len(pd.read_csv(csv_filename))
-    increment = 99.9/ lines
+    increment = 99.9 / lines
 
     #  Get Emails
     errors = {}
@@ -71,15 +70,23 @@ def validate_csv_file(csv_filename, progress_bar, base):
         base.update_idletasks()
         base.update()
 
+    #  Cap the displayed error count
+    total_error_count = len(errors)
+    max_error_display = 10
+    sorted_errors_keys = []
+    for i, key in enumerate(sorted(errors)):
+        if i < max_error_display:
+            sorted_errors_keys.append(key)
+
     #  Sort error messages
     sorted_errors = {}
-    for i in sorted(errors):
+    for i in sorted_errors_keys:
         sorted_errors[i] = errors[i]
 
     #  Print out error messages
     error_message = ""
     if len(errors) > 0:
-        error_message += f"\nErrors: "
+        error_message += f"\nShowing {min(total_error_count, max_error_display)} of {total_error_count} errors: \n"
         for error in sorted_errors:
             error_message += f"\nLine {error + 2}: \t{sorted_errors[error]}\n"
         messagebox.showerror("Errors", error_message)

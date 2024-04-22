@@ -198,10 +198,25 @@ class MainMenu:
             )
             return
         self.selected_sheet = filepath
+
+        self.validate_sheet()
+
         self.set_form_values(
             sheet_button_text=f"[{Path(self.selected_sheet).name}]",
             error_text=""
         )
+
+    def validate_sheet(self):
+        if self.selected_sheet == "" or self.selected_sheet is None:
+            self.set_form_values(
+                error_text="Please select a valid CSV file."
+            )
+            return
+        self.toggle_base_state('disable')
+        self.add_progress_bar()
+        validate_csv_file(self.selected_sheet, self.progress_bar, self.base)
+        self.remove_progress_bar()
+        self.toggle_base_state()
 
     def select_message(self):
         filepath = tkinter.filedialog.askopenfile().name
@@ -219,18 +234,6 @@ class MainMenu:
         image_filepaths = get_image_filenames(filepath)
         self.add_image_selectors(self.image_subframe, image_filepaths)
 
-    def validate_sheet(self):
-        self.toggle_base_state('disable')
-        if self.selected_sheet == "" or self.selected_sheet is None:
-            self.set_form_values(
-                error_text="Please select a valid CSV file."
-            )
-            return
-        self.add_progress_bar()
-        validate_csv_file(self.selected_sheet, self.progress_bar, self.base)
-        self.remove_progress_bar()
-        self.toggle_base_state()
-
     def option_menu_click(self, *args):
         if self.account_menu_selection.get() == "Add New/Update Existing":
             AccountMenu(self.base)
@@ -238,6 +241,7 @@ class MainMenu:
             self.set_form_values(
                 account_selection=self.account_menu_selection.get()
             )
+
     def toggle_base_state(self, state='normal'):
         for child in self.main_frame.winfo_children():
             try:
