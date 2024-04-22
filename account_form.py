@@ -17,7 +17,7 @@ class AccountMenu(Frame):
             ele.destroy()
         self.base = root
         super().__init__()
-        self.color = "Green"
+        self.color = "Red"
 
         self.base.geometry('200x250')
         self.base.title("Login")

@@ -171,7 +171,6 @@ def email_manager(csv_filepath, message_filepath, sender, password, subject, ima
         message = assemble_message(rows, email_index, template, column_names, subject, sender, image_paths,
                                    message_filepath)
         message_queues[i % server_count].append(message)
-    print("Finished assembling messages.")
 
     #  Send Emails
     for i in range(server_count):
@@ -202,6 +201,7 @@ def send_emails(sender, password, increment, progress_bar, base, message_queue: 
     except Exception as e:
         if i == 0:
             messagebox.showinfo("Error", str(e))
+        message_queue.clear()
         return
 
     #  Send the messages and ignore any errors

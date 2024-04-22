@@ -10,16 +10,16 @@ from validate_images import *
 from tkinter import ttk
 from validate_sheet import validate_csv_file
 
-
 class MainMenu:
     def __init__(self, root):
+
         for ele in root.winfo_children():
             ele.destroy()
         self.base = root
         self.selected_sheet = ""
         self.selected_message = ""
         self.selected_account = ""
-        self.color = "Green"
+        self.color = "Red"
 
         self.base.geometry('450x400')  # w x h
         self.base.title("Email Bot")
