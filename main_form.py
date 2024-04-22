@@ -271,7 +271,9 @@ class MainMenu:
                 error_text="Please select the paths for all images in the message."
             )
             return
-
+        self.set_form_values(
+            error_text=""
+        )
         # Need to sort image paths to make them line up
         self.toggle_base_state('disabled')
         self.add_progress_bar()
@@ -279,10 +281,10 @@ class MainMenu:
         for selector in sorted(self.image_selector_map):
             sorted_image_paths.append(self.image_selector_map[selector])
 
-        start_send_emails(
+        email_manager(
             csv_filepath=self.selected_sheet,
             message_filepath=self.selected_message,
-            username=self.selected_account,
+            sender=self.selected_account,
             password=get_stored_accounts()[self.selected_account],
             subject=self.subject.get(),
             image_paths=sorted_image_paths,
