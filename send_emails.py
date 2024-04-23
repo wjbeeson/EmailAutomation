@@ -1,3 +1,4 @@
+import asyncio
 import queue
 import smtplib
 import ssl
@@ -146,7 +147,7 @@ def assemble_message(rows, email_index, template, column_names, subject, sender,
     return message
 
 
-def email_manager(csv_filepath, message_filepath, sender, password, subject, image_paths, progress_bar, base):
+async def email_manager(csv_filepath, message_filepath, sender, password, subject, image_paths, progress_bar, base):
     #  Calculate Increment for progress bar
     lines = len(pd.read_csv(csv_filepath))
     total_progress_bar_size = 99.9
@@ -173,12 +174,15 @@ def email_manager(csv_filepath, message_filepath, sender, password, subject, ima
         message_queues[i % server_count].append(message)
 
     #  Send Emails
+    tasks = []
     for i in range(server_count):
-        t = threading.Thread(target=send_emails,
-                             args=(sender, password, increment, progress_bar, base, message_queues[i], i))
-        t.daemon = True
-        t.start()
+        coroutine = asyncio.to_thread(
+            send_emails, *(sender, password, increment, progress_bar, base, message_queues[i], i)
+        )
+        task = asyncio.create_task(coroutine)
+        tasks.append(task)
 
+    await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
     #  Wait for all emails to send
     while True:
         keep_waiting = False

@@ -1,3 +1,4 @@
+import asyncio
 import tkinter.filedialog
 from account_form import *
 from account_management import *
@@ -284,15 +285,16 @@ class MainMenu:
         sorted_image_paths = []
         for selector in sorted(self.image_selector_map):
             sorted_image_paths.append(self.image_selector_map[selector])
-
-        email_manager(
-            csv_filepath=self.selected_sheet,
-            message_filepath=self.selected_message,
-            sender=self.selected_account,
-            password=get_stored_accounts()[self.selected_account],
-            subject=self.subject.get(),
-            image_paths=sorted_image_paths,
-            progress_bar=self.progress_bar,
-            base=self.base)
+        asyncio.run(
+            email_manager(
+                csv_filepath=self.selected_sheet,
+                message_filepath=self.selected_message,
+                sender=self.selected_account,
+                password=get_stored_accounts()[self.selected_account],
+                subject=self.subject.get(),
+                image_paths=sorted_image_paths,
+                progress_bar=self.progress_bar,
+                base=self.base)
+        )
         self.remove_progress_bar()
         self.toggle_base_state()
